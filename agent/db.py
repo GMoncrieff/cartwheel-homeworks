@@ -137,6 +137,13 @@ def get_store(conn: sqlite3.Connection, store_id: int) -> Store | None:
     return _store_from_row(row) if row else None
 
 
+def get_product(conn: sqlite3.Connection, product_id: int) -> Product | None:
+    row = conn.execute(
+        "SELECT * FROM products WHERE id = ?", (product_id,)
+    ).fetchone()
+    return _product_from_row(row) if row else None
+
+
 def get_store_by_name(conn: sqlite3.Connection, name: str) -> Store | None:
     """Case-insensitive exact match on store name, then slug."""
     row = conn.execute(
@@ -154,6 +161,17 @@ def _store_from_row(row: sqlite3.Row) -> Store:
         category=row["category"],
         return_window_days_override=row["return_window_days_override"],
         restocking_fee_opt_in=bool(row["restocking_fee_opt_in"]),
+    )
+
+
+def _product_from_row(row: sqlite3.Row) -> Product:
+    return Product(
+        id=row["id"],
+        store_id=row["store_id"],
+        title=row["title"],
+        description=row["description"],
+        category=row["category"],
+        price_cents=row["price_cents"],
     )
 
 
@@ -186,17 +204,7 @@ def list_products(
         rows = conn.execute(
             "SELECT * FROM products WHERE store_id = ? ORDER BY id", (store_id,)
         ).fetchall()
-    return [
-        Product(
-            id=row["id"],
-            store_id=row["store_id"],
-            title=row["title"],
-            description=row["description"],
-            category=row["category"],
-            price_cents=row["price_cents"],
-        )
-        for row in rows
-    ]
+    return [_product_from_row(row) for row in rows]
 
 
 def set_order_status(conn: sqlite3.Connection, order_id: int, status: str) -> None:
