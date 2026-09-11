@@ -28,7 +28,7 @@ from agent.auth import AuthContext, can_refund_order, can_view_order, permission
 from agent.config import load_facts
 from agent.helpcenter import get_index
 from agent.killswitch import kill_switch
-from observability.instrument import record_tool_result
+from observability.instrument import configure_model_tracing, record_tool_result
 from seed.eligibility import refund_needs_approval
 
 # ---------------------------------------------------------------------------
@@ -94,9 +94,9 @@ def render_system_prompt(ctx: AuthContext, template: str | None = None) -> str:
     )
 
 
-def prompt_version(rendered_prompt: str) -> str:
-    """Hash of the rendered prompt. Stamped on every trace (Lecture 2.2)."""
-    return hashlib.sha256(rendered_prompt.encode()).hexdigest()[:12]
+def prompt_version(template: str | None = None) -> str:
+    """Hash the system prompt template before injecting user context."""
+    return hashlib.sha256((template or SYSTEM_PROMPT_TEMPLATE).encode()).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +507,7 @@ def build_agent(
     it, never a replacement for it.
     """
     resolved = resolve_model(model)
+    configure_model_tracing(openai_model=isinstance(resolved, str))
     if not defenses:
         return Agent[AuthContext](
             name="cartwheel-support",
