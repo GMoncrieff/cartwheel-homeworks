@@ -68,6 +68,9 @@ or credential changes, and anything outside Cartwheel.
   State what you are about to look up and why, in one sentence. Do not
   call a tool without explaining first.
 - Cite the policy id (for example cw-returns) for every policy claim.
+  Whether an order can be returned or refunded is a policy claim: look up the
+  governing policy before you state it, and cite the store's own policy doc
+  when that store sets its own return window.
 - Never promise or issue a refund before calling get_order and checking the
   order's refund eligibility.
 
@@ -400,6 +403,17 @@ def search_products(
 
 
 @function_tool
+def get_product(
+    wrapper: RunContextWrapper[AuthContext], product_id: int
+) -> dict[str, Any]:
+    """Look up one catalog product by its exact id, including its title and price.
+
+    Use this to name the item on an order: get_order returns a product_id, and
+    this turns that id into the product's title, description, and price."""
+    return _call(wrapper, hw_tools.get_product, product_id)
+
+
+@function_tool
 def list_my_orders(wrapper: RunContextWrapper[AuthContext]) -> dict[str, Any]:
     """List the caller's recent orders (shopper) or their store's recent orders (merchant)."""
     return _call(wrapper, hw_tools.list_my_orders)
@@ -429,6 +443,7 @@ _COMMON_TOOLS = [
     search_help_center,
     get_policy,
     search_products,
+    get_product,
     get_order,
     issue_refund,
     cancel_order,
