@@ -358,29 +358,29 @@ def find_order(ctx: AuthContext, query: str) -> dict[str, Any]:
         return {"ok": True, "orders": []}
 
     with db.connection() as conn:
-        if ctx.role == "merchant":
-            orders = db.list_orders_for_store(conn, ctx.store_id, DEFAULT_ORDER_LIMIT)
+        # The scope always comes from the authenticated context, never from the
+        # query. The helper applies no limit, so matching happens over the whole
+        # authorised scope and only the matches are truncated.
+        if ctx.role == "shopper":
+            orders = db.list_order_search_candidates(conn, user_id=ctx.user_id)
+        elif ctx.role == "merchant":
+            orders = db.list_order_search_candidates(conn, store_id=ctx.store_id)
         elif ctx.role == "support":
-            # Support searches platform-wide, and agent.db has no helper that
-            # lists orders across every user, so read the ids here and fetch
-            # each order through the supplied get_order.
-            rows = conn.execute(
-                "SELECT id FROM orders ORDER BY ordered_at DESC, id DESC LIMIT ?",
-                (DEFAULT_ORDER_LIMIT,),
-            ).fetchall()
-            orders = [db.get_order(conn, row["id"]) for row in rows]
+            orders = db.list_order_search_candidates(conn, all_orders=True)
         else:
-            orders = db.list_orders_for_user(conn, ctx.user_id, DEFAULT_ORDER_LIMIT)
+            return permission_denied(f"role {ctx.role!r} may not search orders")
         titles = {product.id: product.title for product in db.list_products(conn)}
 
-    scored = []
-    for order in orders:
-        title = titles.get(order.product_id, "")
-        score = fuzz.partial_ratio(needle, title.lower())
-        if score >= FIND_MATCH_THRESHOLD:
-            scored.append((score, order))
-    scored.sort(key=lambda pair: (-pair[0], -pair[1].id))
+    # The helper returns newest first (order id breaks ties); filtering
+    # preserves that order, so the five returned are the five most recent
+    # matches rather than the five closest strings.
+    matches = [
+        order
+        for order in orders
+        if fuzz.partial_ratio(needle, titles.get(order.product_id, "").lower())
+        >= FIND_MATCH_THRESHOLD
+    ]
     return {
         "ok": True,
-        "orders": [order.to_public_dict() for _, order in scored[:MAX_FIND_RESULTS]],
+        "orders": [order.to_public_dict() for order in matches[:MAX_FIND_RESULTS]],
     }
